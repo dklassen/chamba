@@ -7,8 +7,15 @@ function createDatabaseStatement() {
   local password="$2"; test $password
   cat <<-EOF
     CREATE DATABASE if not exists chamba_$environment;
-    GRANT ALL PRIVILEGES ON chamba_$environment.* TO 'chamba_user_$environment'@'localhost'
+    GRANT ALL PRIVILEGES ON chamba_$environment.* TO 'chamba_user'@'localhost'
     IDENTIFIED BY '$password' WITH GRANT OPTION;
+EOF
+}
+
+function dropDatabaseStatement() {
+  local environment="$1"; test $environment
+  cat <<-EOF
+    DROP DATABASE chamba_$environment;
 EOF
 }
 
@@ -20,6 +27,13 @@ function setupDatabase(){
         --execute="$(createDatabaseStatement $environment $password)"
 }
 
+function dropDatabase(){
+  local environment="$1"; shift; test $environment
+
+  mysql -p \
+        --execute="$(dropDatabaseStatement $environment)"
+}
+
 function usage(){
   cat <<-EOF
   usage: database
@@ -28,7 +42,8 @@ function usage(){
 
   \$CHAMBA_ENVIRONMENT: configures the environment are going to be setting up
   \$CHAMBA_PASSWORD:    the password for the chamba user that is setup for the particular environment
-
+  Options:
+    -d <environment> : Drop the database for the selected enironment
   Examples:
 
   To setup the database for test environment use:
@@ -41,17 +56,24 @@ EOF
 
 function main() {
   local OPTIND opt
+  local environment
 
   if [ $# -eq 0 ]; then
     usage
     exit 1
   fi
 
-  while getopts "h?s" opt; do
+  while getopts "h?sd:" opt; do
     case $opt in
     s)
       echo "Setting up database for $CHAMBA_ENVIRONMENT environment"
       setupDatabase $CHAMBA_ENVIRONMENT $CHAMBA_PASSWORD
+      exit 0
+    ;;
+    d)
+      environment="${OPTARG}"; test "${OPTARG}"
+      echo "Destroying the database for environment"
+      dropDatabase $environment
       exit 0
     ;;
     h)
