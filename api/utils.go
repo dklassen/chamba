@@ -40,7 +40,7 @@ func environment() string {
 }
 
 func getConfigFile() (file *os.File) {
-	fileName := fmt.Sprintf("../sources.%s.json", environment())
+	fileName := fmt.Sprintf("../config/sources.%s.json", environment())
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Panic(err)
@@ -48,6 +48,8 @@ func getConfigFile() (file *os.File) {
 	return
 }
 
+// GetMysqlConfigs load the configuration file and return the Mysql config information
+// for the environment
 func GetMysqlConfigs() MysqlConfig {
 	configuration := loadConfiguration()
 	return configuration.MysqlConfig

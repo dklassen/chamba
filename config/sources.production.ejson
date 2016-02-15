@@ -1,0 +1,9 @@
+{
+"_public_key" : "79c18b4dc93516d523b62d7d6c246d79ece99fbd289b41388a1dc92abf4b6903",
+"mysqlconfig": {
+  "database": "EJ[1:YEu3juwMBz8ne8BqVEHj6MgodNVPNjnHA3xBZXLFPXM=:WL+XqMy8+ZkyiIE3uOX27S1Kxn3zIwqf:6FsX6iCUzN3DMeWfksO/WcFrv025Jny5ZrC1lOYJoOuq]",
+  "username": "EJ[1:YEu3juwMBz8ne8BqVEHj6MgodNVPNjnHA3xBZXLFPXM=:iCND0v5nbdULbj48f+FbI3Eq8ipW6rN0:5//rFP6wl4Fo4VjXs8dzNoZN/kr7PyvuUO7l]",
+  "password": "EJ[1:YEu3juwMBz8ne8BqVEHj6MgodNVPNjnHA3xBZXLFPXM=:DHMNgZleJEc51Q0Q/pBghTHxGcfo71Ga:fQcGKbwBzaxNOVAlf19K5+PNEwdEnTIyKeWzxMKZFMwIbHkOnZs=]",
+  "host": "EJ[1:YEu3juwMBz8ne8BqVEHj6MgodNVPNjnHA3xBZXLFPXM=:nJlS5CtOxCkup11DeLUVnTa3ZdcH67Jo:r7+qDGdw0VYI7IUDZOyC/xUzHXNFvW+RVw==]",
+  "port": "EJ[1:YEu3juwMBz8ne8BqVEHj6MgodNVPNjnHA3xBZXLFPXM=:yQ7+gOD0vsIjpwOS6V3mQXA/U2pIrUVS:tjVu9XpuYUkuWIb69RdqBnmg/Sk=]"}
+}
