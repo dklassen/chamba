@@ -159,6 +159,7 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 
 	if len(missingFields) != 0 {
 		errorMessage := fmt.Sprintf("Signup was missing required fields %q", missingFields)
+		log.Println(errorMessage)
 		http.Error(w, errorMessage, http.StatusBadRequest)
 		return
 	}
@@ -191,6 +192,7 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 
 	err = user.Save(env.DB)
 	if err != nil {
+		log.Printf(err.Error())
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
@@ -258,9 +260,11 @@ func Signin(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
 	}
 
 	token := struct {
-		Token string
+		Token  string
+		Expiry time.Time
 	}{
 		user.AuthToken.Token,
+		user.AuthToken.Expiry,
 	}
 	js, err := json.Marshal(token)
 	if err != nil {

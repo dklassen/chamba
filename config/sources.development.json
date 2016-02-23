@@ -1,9 +1,9 @@
 {
-"mysqlconfig": {
-  "database": "chamba_development",
-  "username": "chamba_user",
-  "password": "chambadevelopment",
-  "host": "localhost",
-  "port": "3306"
-}
+  "mysqlconfig": {
+    "database": "chamba_development",
+    "username": "chamba_user",
+    "password": "chambadevelopment",
+    "host": "localhost",
+    "port": "3306"
+  }
 }

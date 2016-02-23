@@ -40,10 +40,10 @@ func environment() string {
 }
 
 func getConfigFile() (file *os.File) {
-	fileName := fmt.Sprintf("../config/sources.%s.json", environment())
+	fileName := fmt.Sprintf("%s/src/github.com/dklassen/chamba/config/sources.%s.json", os.Getenv("GOPATH"), environment())
 	file, err := os.Open(fileName)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("The config file %s for the environment %s was not found", fileName, environment())
 	}
 	return
 }
