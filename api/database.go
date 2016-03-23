@@ -6,11 +6,12 @@ import (
 	"os"
 
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // We are using postgres
 )
 
 var db *gorm.DB
 
+// GetDB is a accessor for a shared db object
 func GetDB() *gorm.DB {
 	if db == nil {
 		db = connectToDatabase()

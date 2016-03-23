@@ -51,18 +51,18 @@ type User struct {
 	UpdatedAt    time.Time
 }
 
-func (u *User) toJSON() (js []byte, err error) {
-	return json.Marshal(u)
+func (user *User) toJSON() (js []byte, err error) {
+	return json.Marshal(user)
 }
 
 // Exists checks that a currect user struct can be saved to the database
 // at the moment the only restriction is the PrimaryEmail field which must be unique
 // Per user.
 func (user User) Exists(db *gorm.DB) (exists bool) {
-	check_user := User{}
+	checkUser := User{}
 	empty := User{}
-	db.Where(&User{PrimaryEmail: user.PrimaryEmail}).First(&check_user)
-	return check_user != empty
+	db.Where(&User{PrimaryEmail: user.PrimaryEmail}).First(&checkUser)
+	return checkUser != empty
 }
 
 // Save the user to the database after a few checks to make sure we can do so
@@ -81,6 +81,7 @@ type AppContext struct {
 	Apikey string
 }
 
+// AppHandler contains global state for processing the request
 type AppHandler struct {
 	*AppContext
 	HandlerFunc func(*AppContext, http.ResponseWriter, *http.Request)
@@ -96,6 +97,8 @@ type UserExistsError struct {
 	message string
 }
 
+// Handler function takes state of the application and response reader/writers
+// for processing a request
 type Handler func(env *AppContext,
 	w http.ResponseWriter,
 	r *http.Request)
@@ -114,7 +117,7 @@ func (e UserExistsError) Error() string {
 	return e.message
 }
 
-func (token *AuthToken) IsExpired() bool {
+func (token *AuthToken) isExpired() bool {
 	return token.Expiry.Before(time.Now())
 }
 
@@ -253,7 +256,7 @@ func parseBasicAuthHeader(r *http.Request) (username, password string, err error
 
 func Signin(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
 	user := r.User // Get the authenticated user
-	if user.AuthToken.IsExpired() {
+	if user.AuthToken.isExpired() {
 		newToken := AuthToken{Token: randomString(20),
 			Expiry: oneDayFromNow()}
 		env.DB.Model(&user).Update("AuthToken", newToken)
@@ -288,7 +291,7 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 
 func clearToken(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
 	user := r.User
-	if user.AuthToken.IsExpired() == false {
+	if user.AuthToken.isExpired() == false {
 		db.Where("token = ?", user.AuthToken.Token).Delete(&AuthToken{})
 
 		// expire the token and update the database
@@ -321,6 +324,7 @@ func authenticateAuthToken(h authenticatedHandler) Handler {
 	}
 }
 
+// BasicAuth middleware for using basic auth headers to secure endpoints
 func BasicAuth(h authenticatedHandler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 		email, password, err := parseBasicAuthHeader(r)
@@ -341,6 +345,7 @@ func BasicAuth(h authenticatedHandler) Handler {
 	}
 }
 
+// PostOnly middleware for filtering non post requests
 func PostOnly(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
@@ -351,6 +356,7 @@ func PostOnly(h Handler) Handler {
 	}
 }
 
+// GetOnly middleware for filtering non get requests
 func GetOnly(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {

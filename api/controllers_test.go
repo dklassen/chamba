@@ -1,4 +1,4 @@
-package api_test
+package api
 
 import (
 	"encoding/json"
@@ -13,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/dklassen/chamba/api"
 )
 
 var (
@@ -28,7 +26,7 @@ var (
 
 func init() {
 	os.Setenv("GOENV", "test")
-	server = httptest.NewServer(api.Handlers())              //Creating new server with the user handlers
+	server = httptest.NewServer(Handlers())                  //Creating new server with the user handlers
 	signupURL = fmt.Sprintf("%s/signup", server.URL)         //Grab the address for the API endpoint
 	signinURL = fmt.Sprintf("%s/signin", server.URL)         //Grab the address for the API endpoint
 	getTokenURL = fmt.Sprintf("%s/getToken", server.URL)     //Grab the address for the API endpoint
@@ -36,11 +34,11 @@ func init() {
 }
 
 func tearDown() {
-	api.GetDB().Exec("DELETE FROM users;")
+	GetDB().Exec("DELETE FROM users;")
 }
 
-func setupUser() (expected api.User) {
-	expected = api.User{
+func setupUser() (expected User) {
+	expected = User{
 		FirstName:    "Mark",
 		LastName:     "Twain",
 		PrimaryEmail: "mark@twain.com",
@@ -72,7 +70,7 @@ type HandleTester func(
 	params url.Values,
 ) *httptest.ResponseRecorder
 
-func GenerateHandleTester(t *testing.T, handleFunc api.Handler) HandleTester {
+func GenerateHandleTester(t *testing.T, handleFunc Handler) HandleTester {
 	return func(method string, params url.Values) *httptest.ResponseRecorder {
 		req, err := http.NewRequest(method, "", strings.NewReader(params.Encode()))
 		if err != nil {
@@ -83,14 +81,14 @@ func GenerateHandleTester(t *testing.T, handleFunc api.Handler) HandleTester {
 			"application/x-www-form-urlencoded; param=value",
 		)
 		w := httptest.NewRecorder()
-		context := &api.AppContext{DB: api.GetDB(), Apikey: "15c035e1cd738ee91910a3d19f93cb92"}
-		appHandle := api.AppHandler{AppContext: context, HandlerFunc: handleFunc}
+		context := &AppContext{DB: GetDB(), Apikey: "15c035e1cd738ee91910a3d19f93cb92"}
+		appHandle := AppHandler{AppContext: context, HandlerFunc: handleFunc}
 		appHandle.ServeHTTP(w, req)
 		return w
 	}
 }
 
-func GenerateBasicAuthHandleTester(t *testing.T, handleFunc api.Handler, username, password string) HandleTester {
+func GenerateBasicAuthHandleTester(t *testing.T, handleFunc Handler, username, password string) HandleTester {
 	return func(method string, params url.Values) *httptest.ResponseRecorder {
 		req, err := http.NewRequest(method, "", strings.NewReader(params.Encode()))
 		if err != nil {
@@ -102,8 +100,8 @@ func GenerateBasicAuthHandleTester(t *testing.T, handleFunc api.Handler, usernam
 		)
 		req.SetBasicAuth(username, password)
 		w := httptest.NewRecorder()
-		context := &api.AppContext{DB: api.GetDB(), Apikey: "15c035e1cd738ee91910a3d19f93cb92"}
-		appHandle := api.AppHandler{AppContext: context, HandlerFunc: handleFunc}
+		context := &AppContext{DB: GetDB(), Apikey: "15c035e1cd738ee91910a3d19f93cb92"}
+		appHandle := AppHandler{AppContext: context, HandlerFunc: handleFunc}
 		appHandle.ServeHTTP(w, req)
 		return w
 	}
@@ -111,18 +109,18 @@ func GenerateBasicAuthHandleTester(t *testing.T, handleFunc api.Handler, usernam
 
 func TestFilteringRouteHandlers(t *testing.T) {
 	var testCases = []struct {
-		handler            func(api.Handler) api.Handler
+		handler            func(Handler) Handler
 		method             string
 		expectedStatusCode int
 	}{
-		{handler: api.GetOnly, method: "GET", expectedStatusCode: http.StatusOK},
-		{handler: api.GetOnly, method: "POST", expectedStatusCode: http.StatusMethodNotAllowed},
-		{handler: api.PostOnly, method: "POST", expectedStatusCode: http.StatusOK},
-		{handler: api.PostOnly, method: "GET", expectedStatusCode: http.StatusMethodNotAllowed},
+		{handler: GetOnly, method: "GET", expectedStatusCode: http.StatusOK},
+		{handler: GetOnly, method: "POST", expectedStatusCode: http.StatusMethodNotAllowed},
+		{handler: PostOnly, method: "POST", expectedStatusCode: http.StatusOK},
+		{handler: PostOnly, method: "GET", expectedStatusCode: http.StatusMethodNotAllowed},
 	}
 
 	for _, testCase := range testCases {
-		getHandler := testCase.handler(func(env *api.AppContext, w http.ResponseWriter, r *http.Request) {
+		getHandler := testCase.handler(func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 			return
 		})
 		test := GenerateHandleTester(t, getHandler)
@@ -136,24 +134,24 @@ func TestFilteringRouteHandlers(t *testing.T) {
 func TestAuthTokenIsNotExpiredWhenStillInFuture(t *testing.T) {
 	now := time.Now()
 	oneSecondInTheFuture := now.Add(time.Duration(1) * time.Second)
-	expected := api.AuthToken{
+	expected := AuthToken{
 		Token:  "aRandomString",
 		Expiry: oneSecondInTheFuture,
 	}
 
-	if expected.IsExpired() {
+	if expected.isExpired() {
 		t.Error("Expected auth token to be valid")
 	}
 }
 
-func TestAuthTokenIsExpiredWhenInPast(t *testing.T) {
+func TestAuthTokenisExpiredWhenInPast(t *testing.T) {
 	now := time.Now()
-	expected := api.AuthToken{
+	expected := AuthToken{
 		Token:  "aRandomString",
 		Expiry: now,
 	}
 
-	if expected.IsExpired() != true {
+	if expected.isExpired() != true {
 		t.Error("Expected auth token to be expired")
 	}
 }
@@ -203,7 +201,7 @@ func TestSignUpHandler(t *testing.T) {
 		data.Add("email", testCase.Email)
 		data.Add("password", testCase.Password)
 
-		test := GenerateHandleTester(t, api.Signup)
+		test := GenerateHandleTester(t, Signup)
 		w := test("POST", data) // In the full route we filter out GET requests
 		if w.Code != testCase.ExpectedStatusCode {
 			t.Errorf("Expected %d but got %d reason %s", testCase.ExpectedStatusCode, w.Code, w.Body)
@@ -213,7 +211,7 @@ func TestSignUpHandler(t *testing.T) {
 }
 
 func TestSignupSavesUserToDatabaseAsExpected(t *testing.T) {
-	expected := api.User{
+	expected := User{
 		FirstName:    "Mark",
 		LastName:     "Twain",
 		PrimaryEmail: "mark@twain.com",
@@ -233,8 +231,8 @@ func TestSignupSavesUserToDatabaseAsExpected(t *testing.T) {
 		t.Error(err)
 	}
 
-	result := api.User{}
-	api.GetDB().Where(api.User{PrimaryEmail: expected.PrimaryEmail}).First(&result)
+	result := User{}
+	GetDB().Where(User{PrimaryEmail: expected.PrimaryEmail}).First(&result)
 
 	if expected.FirstName != result.FirstName && expected.PrimaryEmail != expected.PrimaryEmail {
 		t.Error("Unable to find saved user expected:", expected, "got:", result)
@@ -275,7 +273,7 @@ func TestEnteredEmailAndPasswordsInSignInRoute(t *testing.T) {
 	}
 
 	for _, testCase := range testingTable {
-		test := GenerateBasicAuthHandleTester(t, api.BasicAuth(api.Signin), testCase.EnteredEmail, testCase.EnteredPassword)
+		test := GenerateBasicAuthHandleTester(t, BasicAuth(Signin), testCase.EnteredEmail, testCase.EnteredPassword)
 		w := test("POST", data) // In the full route we filter out GET requests
 		if w.Code != testCase.ExpectedStatusCode {
 			t.Errorf("Expected %d but got %d reason %s", testCase.ExpectedStatusCode, w.Code, w.Body)
