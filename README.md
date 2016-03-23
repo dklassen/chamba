@@ -1,4 +1,7 @@
 ##Chomba
+
+[![Circle CI](https://circleci.com/gh/dklassen/chamba.svg?style=svg)](https://circleci.com/gh/dklassen/chamba)
+
 // add build kite service  here
 
 ### Dependencies
