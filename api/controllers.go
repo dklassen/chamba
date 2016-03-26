@@ -28,27 +28,45 @@ type AuthenticatedRequest struct {
 
 // AuthToken Represents the auth token we use for authorization
 type AuthToken struct {
-	ID        uint   `gorm:"primary_key"`
-	UserID    int    `sql:"index"`
-	Token     string `sql:"not null"`
-	Expiry    time.Time
-	DeletedAt *time.Time
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	gorm.Model
+	UserID int    `sql:"index"`
+	Token  string `sql:"not null"`
+	Expiry time.Time
 }
 
 // User represents a chamba user
 type User struct {
-	ID           uint   `gorm:"primary_key"`
+	gorm.Model
 	FirstName    string `sql:"not null"`
 	LastName     string `sql:"not null"`
 	UserName     string `sql:"not null"`
 	PrimaryEmail string `sql:"not null;unique"`
 	Password     string `sql:"not null;unique"`
+	Type         string
+	FarmID       uint
+	Address      Address
+	Category     string
 	AuthToken    AuthToken
-	DeletedAt    *time.Time
-	CreatedAt    time.Time `sql:"not null;unique"`
-	UpdatedAt    time.Time
+}
+
+// Address is a physical location on the earth
+type Address struct {
+	gorm.Model
+	FarmID          uint
+	UserID          uint
+	Latitude        int
+	Longitude       int
+	City            string
+	PostalOrZipCode string
+	ProvinceOrState string
+}
+
+// Farm represents a chamba farm where users can work
+type Farm struct {
+	gorm.Model
+	Owner   User // the chamba user associated with the farm
+	Name    string
+	Address Address
 }
 
 func (user *User) toJSON() (js []byte, err error) {

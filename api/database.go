@@ -34,7 +34,5 @@ func connectToDatabase() *gorm.DB {
 		log.Fatal(err)
 	}
 	verifyDatabaseConnection(&db)
-	// FIXME:: DO not automigrate
-	db.AutoMigrate(&User{}, &AuthToken{})
 	return &db
 }
