@@ -1,10 +1,11 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/exec"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func executeCommand(command string, ignore bool) string {
@@ -23,7 +24,7 @@ func up() {
 	executeCommand("docker build --tag chamba-postgres --rm $GOPATH/src/github.com/dklassen/chamba/cmd/chamba-development-setup/", false)
 	executeCommand("docker rm /chamba-postgres", true) // TODO:: FIgure out why we have to remove the existing killed container name
 	executeCommand("docker run -p 5432:5432 --name chamba-postgres -d chamba-postgres", false)
-	dockerIP := executeCommand("docker-machine ip chamba", true)
+	dockerIP := executeCommand("docker-machine ip default", true)
 	dockerIP = strings.Replace(dockerIP, "\n", "", -1)
 	log.Printf("To connect to database export DATABASE_URL=postgres://chamba_user@%s:5432/chamba?sslmode=disable\n", dockerIP)
 }

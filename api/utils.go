@@ -1,8 +1,9 @@
 package api
 
 import (
-	"log"
 	"os"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var (

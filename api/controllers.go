@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/jinzhu/gorm"
 
@@ -17,14 +19,6 @@ import (
 )
 
 var requiredSignupFields = []string{"firstname", "lastname", "email", "password"}
-
-// AuthenticatedRequest represents an a request that has a verified user associated
-// in the db. Here we take a request with basic auth and generate a request with the
-// user retrieved from the database
-type AuthenticatedRequest struct {
-	*http.Request
-	User User
-}
 
 // AuthToken Represents the auth token we use for authorization
 type AuthToken struct {
@@ -61,12 +55,32 @@ type Address struct {
 	ProvinceOrState string
 }
 
+// Review table holds reviews about a farm or work experience
+type Review struct {
+	gorm.Model
+	Stars   int
+	Comment string
+}
+
+// Task is a unit of work completed
+type Task struct {
+	Status bool
+}
+
+type Crop struct {
+	gorm.Model
+	FarmID uint
+	Name   string
+}
+
 // Farm represents a chamba farm where users can work
 type Farm struct {
 	gorm.Model
-	Owner   User // the chamba user associated with the farm
-	Name    string
-	Address Address
+	Owner       User // the chamba user associated with the farm
+	Name        string
+	Description string
+	Crops       []Crop
+	Address     Address
 }
 
 func (user *User) toJSON() (js []byte, err error) {
@@ -87,6 +101,7 @@ func (user User) Exists(db *gorm.DB) (exists bool) {
 func (user User) Save(db *gorm.DB) (err error) {
 	if user.Exists(db) {
 		err = UserExistsError{fmt.Sprintf("Unable to save user with PrimaryEmail %s already exists in database", user.PrimaryEmail)}
+		log.Error(err)
 		return
 	}
 	db.Save(&user)
@@ -97,6 +112,7 @@ func (user User) Save(db *gorm.DB) (err error) {
 type AppContext struct {
 	DB     *gorm.DB
 	Apikey string
+	User   User
 }
 
 // AppHandler contains global state for processing the request
@@ -120,12 +136,6 @@ type UserExistsError struct {
 type Handler func(env *AppContext,
 	w http.ResponseWriter,
 	r *http.Request)
-
-// Authenticated Handler has a request containing the retrieved user
-// information after a auth request
-type authenticatedHandler func(env *AppContext,
-	w http.ResponseWriter,
-	r *AuthenticatedRequest)
 
 func (e AuthenticationError) Error() string {
 	return e.message
@@ -165,6 +175,8 @@ func randomString(strlen int) string {
 	return string(result)
 }
 
+// Signup route for a user. Takes and validates the sign in information
+// returns user information json blob
 func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 	missingFields := []string{}
 	signupFields := map[string]string{}
@@ -180,7 +192,7 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 
 	if len(missingFields) != 0 {
 		errorMessage := fmt.Sprintf("Signup was missing required fields %q", missingFields)
-		log.Println(errorMessage)
+		log.Error(errorMessage)
 		http.Error(w, errorMessage, http.StatusBadRequest)
 		return
 	}
@@ -195,6 +207,7 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 	//
 	saltedPassword, err := saltPassword(signupFields["password"])
 	if err != nil {
+		log.Error(err)
 		http.Error(w, "ServerError", http.StatusInternalServerError)
 		return
 	}
@@ -207,13 +220,14 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 
 	js, err := user.toJSON()
 	if err != nil {
+		log.Error(err)
 		http.Error(w, "ServerError", http.StatusInternalServerError)
 		return
 	}
 
 	err = user.Save(env.DB)
 	if err != nil {
-		log.Printf(err.Error())
+		log.Error(err)
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
@@ -222,13 +236,13 @@ func Signup(env *AppContext, w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-// authenticateUser compare the posted email and password against
-// user in the database
 func authenticateUser(db *gorm.DB, email, password string) (user User, err error) {
 	db.Where(User{PrimaryEmail: email}).First(&user)
 	if user.PrimaryEmail == email && comparePassword(password, user.Password) == nil {
 		return
 	}
+
+	log.Errorf("Authorization denied for: %s", email)
 	return user, AuthenticationError{"Authorization denied"}
 }
 
@@ -236,7 +250,8 @@ func authenticateTokenUser(db *gorm.DB, token string) (user User, err error) {
 	db.Preload("AuthToken", "token = ?", token).First(&user)
 	empty := User{}
 	if user == empty {
-		err = AuthenticationError{"Authorization denied"}
+		err = AuthenticationError{"No user found for token"}
+		log.Errorf(err)
 	}
 	return
 }
@@ -272,8 +287,10 @@ func parseBasicAuthHeader(r *http.Request) (username, password string, err error
 	return pair[0], pair[1], err
 }
 
-func Signin(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
-	user := r.User // Get the authenticated user
+// Signin checks user to see if valid auth token if yes generates new auth token and expires
+// old
+func Signin(env *AppContext, w http.ResponseWriter, r *http.Request) {
+	user := env.User // Get the authenticated user
 	if user.AuthToken.isExpired() {
 		newToken := AuthToken{Token: randomString(20),
 			Expiry: oneDayFromNow()}
@@ -289,10 +306,13 @@ func Signin(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
 	}
 	js, err := json.Marshal(token)
 	if err != nil {
-		log.Println(err)
+		log.WithFields(log.Fields{
+			"action": "signin",
+		}).Error(err)
 		http.Error(w, "ServerError", http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
 }
@@ -307,8 +327,8 @@ func resetPassword(w http.ResponseWriter, r *http.Request) {
 	// save
 }
 
-func clearToken(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest) {
-	user := r.User
+func clearToken(env *AppContext, w http.ResponseWriter, r *http.Request) {
+	user := env.User
 	if user.AuthToken.isExpired() == false {
 		db.Where("token = ?", user.AuthToken.Token).Delete(&AuthToken{})
 
@@ -321,7 +341,7 @@ func clearToken(env *AppContext, w http.ResponseWriter, r *AuthenticatedRequest)
 	return
 }
 
-func authenticateAuthToken(h authenticatedHandler) Handler {
+func authenticateAuthToken(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 		token, err := parseAuthTokenFromRequest(r)
 		if err != nil {
@@ -337,56 +357,85 @@ func authenticateAuthToken(h authenticatedHandler) Handler {
 			return
 		}
 		// lookup user with token and attach to authenticated request
-		basicAuthResponse := AuthenticatedRequest{r, user}
-		h(env, w, &basicAuthResponse)
+		env.User = user
+		h(env, w, r)
 	}
 }
 
-// BasicAuth middleware for using basic auth headers to secure endpoints
-func BasicAuth(h authenticatedHandler) Handler {
+// BasicAuth middleware for using basic auth headers to secure actions
+func BasicAuth(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
 		email, password, err := parseBasicAuthHeader(r)
 		if err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{"action": "BasicAuth"}).Error(err)
 			http.Error(w, "authorization failed", http.StatusUnauthorized)
 			return
 		}
 		user, err := authenticateUser(env.DB, email, password)
 		if err != nil {
-			log.Println(err)
+			log.WithFields(log.Fields{"action": "BasicAuth"}).Error(err)
 			http.Error(w, "authorization failed", http.StatusUnauthorized)
 			return
 		}
 
-		basicAuthResponse := AuthenticatedRequest{r, user}
-		h(env, w, &basicAuthResponse)
+		env.User = user
+		h(env, w, r)
+
 	}
 }
 
 // PostOnly middleware for filtering non post requests
 func PostOnly(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			h(env, w, r)
+		if r.Method != "POST" {
+			log.WithFields(log.Fields{
+				"url":         r.URL,
+				"http_method": r.Method,
+				"datetime":    time.Now(),
+			}).Error("POST requests only")
+			http.Error(w, "POST requests only", http.StatusMethodNotAllowed)
 			return
 		}
-		http.Error(w, "POST requests only", http.StatusMethodNotAllowed)
+		h(env, w, r)
 	}
 }
 
 // GetOnly middleware for filtering non get requests
 func GetOnly(h Handler) Handler {
 	return func(env *AppContext, w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			h(env, w, r)
+		if r.Method != "GET" {
+			log.WithFields(log.Fields{
+				"url":         r.URL,
+				"http_method": r.Method,
+				"datetime":    time.Now(),
+			}).Error("GET requests only")
+			http.Error(w, "GET requests only", http.StatusMethodNotAllowed)
 			return
 		}
-		http.Error(w, "GET requests only", http.StatusMethodNotAllowed)
+		h(env, w, r)
 	}
 }
 
+func checkResponseBody(response *http.Request) string {
+	body, _ := ioutil.ReadAll(response.Body)
+	return string(body)
+}
+
 func (h AppHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	h.HandlerFunc(h.AppContext, w, r)
+	end := time.Now()
+	latency := end.Sub(start)
+	log.WithFields(log.Fields{
+		"datetime":           start,
+		"url":                r.URL,
+		"ip":                 r.RemoteAddr,
+		"latency_nanesecond": latency.Nanoseconds(),
+		"http_user_agent":    r.UserAgent(),
+		"http_method":        r.Method,
+		"response_header":    w.Header(),
+		"request_body":       checkResponseBody(r),
+	}).Info("Served request")
 }
 
 // Handlers register api routes here
