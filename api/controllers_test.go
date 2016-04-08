@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 var (
@@ -58,11 +59,6 @@ func setupUser() (expected User) {
 		log.Println(err)
 	}
 	return
-}
-
-func checkResponseBody(response *http.Response) string {
-	body, _ := ioutil.ReadAll(response.Body)
-	return string(body)
 }
 
 type HandleTester func(
