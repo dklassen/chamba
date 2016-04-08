@@ -13,7 +13,7 @@ var (
 	usage = fmt.Sprintf(`Usage: %s COMMAND
 The flags available are a subset of the POSIX ones, but should behave similarly.
 Valid commands:
- nuke  - Nuke the database and migrate
+ nuke  - Nuke the database and migrate back to ground zero
  migrate - Migrate the database to the latest schema
 `, os.Args[0])
 )
@@ -26,6 +26,7 @@ func nuke() {
 		&api.AuthToken{},
 		&api.Address{},
 		&api.Farm{})
+	migrate()
 }
 
 func migrate() {
@@ -45,7 +46,6 @@ func migrate() {
 
 	finishedAt := time.Now()
 	duration := finishedAt.Sub(startedAt)
-	log.Info("Finished database migration")
 	log.WithFields(log.Fields{
 		"started_at":  startedAt,
 		"finished_at": finishedAt,
