@@ -61,11 +61,6 @@ func setupUser() (expected User) {
 	return
 }
 
-func checkResponseBody(response *http.Response) string {
-	body, _ := ioutil.ReadAll(response.Body)
-	return string(body)
-}
-
 type HandleTester func(
 	method string,
 	params url.Values,
